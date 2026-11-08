@@ -1,0 +1,59 @@
+name: Plan task
+description: One point from the November build plan (K1, W1-3, ...)
+title: "[ID] · "
+# Uncomment and fill in once your board exists (number is in the board URL):
+# projects: ["YOUR-GITHUB-USERNAME/1"]
+assignees:
+  - yajushi200
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Replace [ID] in the title with the point ID from the plan.
+        Copy the "Done when" line from the plan so you know when to close this.
+
+  - type: input
+    id: goal
+    attributes:
+      label: Goal
+      description: One line. What does this point achieve?
+      placeholder: "e.g. Bronze tables loaded with three ingestion methods"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      description: Where does this work happen?
+      options:
+        - Databricks
+        - Azure
+        - GitHub
+        - Local
+    validations:
+      required: true
+
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: The acceptance line from the plan.
+    validations:
+      required: true
+
+  - type: textarea
+    id: break-it
+    attributes:
+      label: Break it
+      description: What will you break on purpose? Leave empty if nothing.
+    validations:
+      required: false
+
+  - type: textarea
+    id: learned
+    attributes:
+      label: What I learned
+      description: Fill this in when you close the issue.
+    validations:
+      required: false
