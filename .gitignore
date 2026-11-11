@@ -227,5 +227,6 @@ data/
 .databricks/
 kaggle.json
 .gemini/
+scratch/
 
 
