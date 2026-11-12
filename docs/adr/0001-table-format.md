@@ -33,7 +33,7 @@ Chosen option: "Delta Lake", because it meets every decision driver natively on 
 
 ## Risk and Compliance
 * Privacy / PII: time travel keeps old versions of rows, so deleted personal data can remain readable until VACUUM removes old files. Retention settings and VACUUM must be configured (W2-8, W3-2).
-* Card data (PCI): no impact on the format choice itself. CVV is handled at ingestion (ADR-0008).
+* Card data (PCI): no impact on the format choice itself. CVV is handled at ingestion (ADR-0005).
 * Access and retention: Delta tables are governed by Unity Catalog grants, row filters and column masks.
 
 ## Pros and Cons of the Options

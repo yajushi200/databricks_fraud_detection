@@ -45,7 +45,7 @@ The JSON reshaping (dictionary to rows) happens during the load, inside Databric
 
 ## Risk and Compliance
 * Privacy / PII: users and cards contain PII; the loading method does not change exposure. Masking is applied in later layers (W3-2).
-* Card data (PCI): CVV is dropped during the cards load, before it reaches bronze (ADR-0008).
+* Card data (PCI): CVV is dropped during the cards load, before it reaches bronze (ADR-0005).
 * Access and retention: Auto Loader checkpoints and source files must be readable only by the pipeline identity.
 
 ## Pros and Cons of the Options

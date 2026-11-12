@@ -35,7 +35,7 @@ Planned exception: one external volume and table on ADLS (W1-7), to practise ext
 
 ## Risk and Compliance
 * Privacy / PII: data is only reachable through Unity Catalog, so masks and row filters always apply. Deleting a table really removes the data, which supports deletion requests.
-* Card data (PCI): no direct impact; CVV handling is covered in ADR-0008.
+* Card data (PCI): no direct impact; CVV handling is covered in ADR-0005.
 * Access and retention: DROP and MODIFY privileges restricted to the pipeline's service principal and engineers. Retention handled by predictive optimisation and VACUUM settings.
 
 ## Pros and Cons of the Options
