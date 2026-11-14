@@ -226,5 +226,7 @@ __marimo__/
 data/
 .databricks/
 kaggle.json
+.gemini/
+scratch/
 
 

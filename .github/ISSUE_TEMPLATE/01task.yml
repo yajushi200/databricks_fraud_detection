@@ -1,8 +1,7 @@
 name: Plan task
 description: One point from the November build plan (K1, W1-3, ...)
 title: "[ID] · "
-# Uncomment and fill in once your board exists (number is in the board URL):
-# projects: ["YOUR-GITHUB-USERNAME/1"]
+projects: ["yajushi200/1"] # already done in auto-add project workflow while creating the board
 assignees:
   - yajushi200
 body:
@@ -27,7 +26,7 @@ body:
       label: Where
       description: Where does this work happen?
       options:
-        - Databricks
+        - Databricks(Free Edition)
         - Azure
         - GitHub
         - Local
@@ -46,7 +45,7 @@ body:
     id: break-it
     attributes:
       label: Break it
-      description: What will you break on purpose? Leave empty if nothing.
+      description: What will you break on purpose? and what do you predict will happen? Leave empty if nothing.
     validations:
       required: false
 
