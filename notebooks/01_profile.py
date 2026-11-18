@@ -141,4 +141,24 @@ df_amt = df.withColumn("num", F.regexp_replace("amount", r"\$", "").cast("decima
    .join(df_mcc, "mcc", "left")
    .orderBy("count", ascending=False)
    .show(10, truncate=False))
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 3(d). Convert the text to a real timestamp
+# COMMAND ----------
+df = dfs["transactions"]
+
+dts = df.select(
+    F.col("date").alias("raw"),
+    F.try_to_timestamp(F.col("date"), F.lit("yyyy-MM-dd HH:mm:ss")).alias("ts")
+)
+dts.show(5, truncate=False)
+# COMMAND ----------
+dts.filter(F.col("ts").isNull()).count()
+# COMMAND ----------
+dts.select(F.min("ts").alias("first"), F.max("ts").alias("last")).show(truncate=False)
+# COMMAND ----------
+(dts.groupBy(F.year("ts").alias("year")).count()
+    .orderBy("year")
+    .show(truncate=False))
 # COMMAND ----------
