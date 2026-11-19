@@ -29,6 +29,9 @@ No duplicate keys in any source today. Silver still deduplicates, as protection 
 | F7 | transactions.amount | Negative amounts are common and mostly not refunds | 660,049 negative (~5%); ~88% at food stores (5499) and gas stations (5541); floor exactly −$500 (176 rows) | Keep; add `is_credit` flag; don't treat as errors | — |
 | F8 | transactions.amount | Zero amounts exist | 10,639 rows | Keep; flag for review | warn |
 | F9 | mcc lookup | Dataset's MCC descriptions differ from the official standard for 3xxx codes | e.g. 3504 = "Gardening Supplies" | Use the provided lookup in this project; note the deviation | — |
+| F10 | transactions.date | Always parses; 2019 is a partial year | 0 parse failures (format `yyyy-MM-dd HH:mm:ss`); range 2010-01-01 to 2019-10-31; 2019 has 10 months at the same monthly rate as 2018 (~116k/month); steady growth, no gaps | Cast to timestamp; remember 2019 is partial when splitting by time for ML | fail if parse fails |
+| F11 | fraud_labels | Labels cover ~67% of transactions evenly in every year; no year is entirely labeled or entirely unlabeled | Labeled share is 67.0% in each year 2010–2019 (e.g. 2010: 831,529 of 1,240,880 labeled, 409,351 unlabeled; 2019: 777,339 of 1,159,966 labeled) | Time-based ML split is possible (train older years, validate 2018, test 2019); the unlabeled third is a random holdout across all years, not future data | — |
+| F12 | transactions.errors | 7 error types, sometimes combined; rows with errors are ~2.8× more likely to be fraud | Types: Insufficient Balance 131,621 · Bad PIN 32,482 · Technical Glitch 26,633 · Bad Card Number 7,925 · Bad Expiration 6,295 · Bad CVV 6,241 · Bad Zipcode 1,138. Fraud rate 0.401% with errors vs 0.145% without | Silver: split into an array column; gold/ML: one flag per error type + error_count | — |
 
 ## Open questions for the data owner
 
@@ -37,8 +40,6 @@ No duplicate keys in any source today. Silver still deduplicates, as protection 
 3. What are the zero-amount transactions (F8)?
 
 ## Pending checks
-
-- Dates: parsing, range, rows per year
 - `errors` values
 - Referential integrity across files
 - Cards, users and labels validity

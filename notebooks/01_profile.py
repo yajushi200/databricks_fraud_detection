@@ -162,3 +162,42 @@ dts.select(F.min("ts").alias("first"), F.max("ts").alias("last")).show(truncate=
     .orderBy("year")
     .show(truncate=False))
 # COMMAND ----------
+labeled = df.join(df_labels, df.id == df_labels.transaction_id, "left")
+
+(labeled.groupBy(F.year(F.try_to_timestamp(F.col("date"), F.lit("yyyy-MM-dd HH:mm:ss"))).alias("year"))
+   .agg(F.count("*").alias("transactions"),
+        F.count("transaction_id").alias("labeled"))
+   .orderBy("year")
+   .show(truncate=False))
+# COMMAND ----------
+(df.filter(F.col("errors").isNotNull() & (F.col("errors") != ""))
+   .groupBy("errors").count()
+   .orderBy("count", ascending=False)
+   .show(20, truncate=False))
+# COMMAND ----------
+(df.filter(F.col("errors").isNotNull() & (F.col("errors") != ""))
+   .select(F.explode(F.split("errors", ",")).alias("error"))
+   .groupBy("error").count()
+   .orderBy("count", ascending=False)
+   .show(truncate=False))
+# COMMAND ----------
+(labeled.filter(F.col("is_fraud").isNotNull())
+   .groupBy((F.col("errors").isNotNull() & (F.col("errors") != "")).alias("has_error"))
+   .agg(F.count("*").alias("transactions"),
+        F.sum(F.when(F.col("is_fraud") == "Yes", 1).otherwise(0)).alias("fraud"))
+   .withColumn("fraud_rate_%", F.round(F.col("fraud") / F.col("transactions") * 100, 3))
+   .show(truncate=False))
+# COMMAND ----------
+amt_num = F.regexp_replace("amount", r"\$", "").cast("decimal(12,2)")
+
+(labeled.filter(F.col("is_fraud").isNotNull() & F.col("errors").isNotNull() & (F.col("errors") != ""))
+   .withColumn("error", F.explode(F.split("errors", ",")))
+   .groupBy("error")
+   .agg(F.count("*").alias("transactions"),
+        F.sum(F.when(F.col("is_fraud") == "Yes", 1).otherwise(0)).alias("fraud"),
+        F.sum(F.when(F.col("is_fraud") == "Yes", amt_num).otherwise(0)).alias("fraud_amount"))
+   .withColumn("fraud_rate_%", F.round(F.col("fraud") / F.col("transactions") * 100, 3))
+   .orderBy("fraud_rate_%", ascending=False)
+   .show(truncate=False))
+
+# COMMAND ----------
