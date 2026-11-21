@@ -201,3 +201,166 @@ amt_num = F.regexp_replace("amount", r"\$", "").cast("decimal(12,2)")
    .show(truncate=False))
 
 # COMMAND ----------
+# MAGIC %md
+# MAGIC ## 5. Referential Integrity (Finding Orphan Rows)
+# COMMAND ----------
+links = [
+    # (name,                              child,          child_col,        parent,         parent_col)
+    ("txn.card_id -> cards.id",           "transactions", "card_id",        "cards",        "id"),
+    ("txn.client_id -> users.id",         "transactions", "client_id",      "users",        "id"),
+    ("cards.client_id -> users.id",       "cards",        "client_id",      "users",        "id"),
+    ("txn.mcc -> mcc.mcc",                "transactions", "mcc",            "mcc",          "mcc"),
+    ("labels.transaction_id -> txn.id",   "labels",       "transaction_id", "transactions", "id"),
+]
+
+for name, child_name, child_col, parent_name, parent_col in links:
+    child = dfs[child_name]
+    parent_keys = dfs[parent_name].select(F.col(parent_col).alias("_pk"))
+    orphans = child.join(parent_keys, child[child_col] == parent_keys["_pk"], "left_anti")
+    print(f"{name}: {orphans.count():,} orphans")
+# COMMAND ----------
+fake = spark.createDataFrame([("FAKE1", "99999999")], ["id", "card_id"])
+fake.join(dfs["cards"].select(F.col("id").alias("_pk")),
+          fake["card_id"] == F.col("_pk"), "left_anti").count()
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 6. Consistency (do the related facts agree with each other?)
+# COMMAND ----------
+card_owners = dfs["cards"].select(
+    F.col("id").alias("card_pk"),
+    F.col("client_id").alias("card_owner"),
+)
+
+joined = dfs["transactions"].join(card_owners, F.col("card_id") == F.col("card_pk"), "inner")
+
+print(f"Joined rows: {joined.count():,}")   # should be 13,305,915
+
+mismatches = joined.filter(F.col("client_id") != F.col("card_owner")).count()
+print(f"Client/card owner mismatches: {mismatches:,}")
+# COMMAND ----------
+actual = (
+    dfs["cards"]
+    .groupBy("client_id")
+    .agg(F.count("*").alias("actual_cards"))
+)
+
+print(f"Clients with at least 1 card: {actual.count():,}")
+actual.orderBy(F.desc("actual_cards")).show(10)
+# COMMAND ----------
+compare = (
+    dfs["users"]
+    .select(F.col("id"), F.col("num_credit_cards").cast("int").alias("stated_cards"))
+    .join(actual, F.col("id") == F.col("client_id"), "left")
+    .withColumn("actual_cards", F.coalesce(F.col("actual_cards"), F.lit(0)))
+)
+
+print(f"Users compared: {compare.count():,}")   # should be 2,000
+mismatch = compare.filter(F.col("stated_cards") != F.col("actual_cards"))
+print(f"Users where stated != actual: {mismatch.count():,}")
+mismatch.show(10)
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 7. Validity (Cards)
+# COMMAND ----------
+categorical = [
+    ("cards",  "card_brand"),
+    ("cards",  "card_type"),
+    ("cards",  "has_chip"),
+    ("cards",  "card_on_dark_web"),
+    ("users",  "gender"),
+    ("labels", "is_fraud"),
+]
+
+for table, col in categorical:
+    print(f"--- {table}.{col} ---")
+    (dfs[table]
+        .groupBy(col)
+        .count()
+        .orderBy(F.desc("count"), col)
+        .show(truncate=False))
+# COMMAND ----------
+numeric_cols = [
+    ("cards", "credit_limit"),
+    ("users", "per_capita_income"),
+    ("users", "yearly_income"),
+    ("users", "total_debt"),
+    ("users", "credit_score"),
+    ("users", "current_age"),
+    ("users", "retirement_age"),
+    ("users", "birth_year"),
+]
+
+for table, col in numeric_cols:
+    raw = F.col(col)
+    parsed = F.regexp_replace(raw, r"[$,]", "").cast("decimal(14,2)")
+    (dfs[table]
+        .agg(
+            F.count(F.when(raw.isNotNull() & parsed.isNull(), 1)).alias("failed_parse"),
+            F.min(parsed).alias("min"),
+            F.max(parsed).alias("max"),
+        )
+        .show(truncate=False))
+    print(f"^ {table}.{col}")
+# COMMAND ----------
+print("--- credit_limit = 0, by card_type ---")
+(dfs["cards"]
+    .filter(F.regexp_replace("credit_limit", r"[$,]", "").cast("decimal(14,2)") == 0)
+    .groupBy("card_type").count().show())
+
+print("--- users with yearly_income under $1,000 ---")
+print(dfs["users"]
+    .filter(F.regexp_replace("yearly_income", r"[$,]", "").cast("decimal(14,2)") < 1000)
+    .count())
+
+print("--- birth_year + current_age ---")
+(dfs["users"]
+    .groupBy((F.col("birth_year").cast("int") + F.col("current_age").cast("int")).alias("as_of_year"))
+    .count().show())
+# COMMAND ----------
+for col in ["expires", "acct_open_date"]:
+    parsed = F.try_to_timestamp(F.col(col), F.lit("MM/yyyy"))
+    print(f"--- cards.{col} ---")
+    (dfs["cards"]
+        .agg(
+            F.count(F.when(F.col(col).isNotNull() & parsed.isNull(), 1)).alias("failed_parse"),
+            F.min(parsed).alias("min"),
+            F.max(parsed).alias("max"),
+        )
+        .show(truncate=False))
+# COMMAND ----------
+cards_dates = dfs["cards"].select(
+    F.col("id").alias("card_pk"),
+    F.try_to_timestamp(F.col("acct_open_date"), F.lit("MM/yyyy")).alias("opened"),
+    F.try_to_timestamp(F.col("expires"), F.lit("MM/yyyy")).alias("exp"),
+)
+
+print("Cards opened after they expire:",
+      cards_dates.filter(F.col("opened") > F.col("exp")).count())
+
+txn_dates = (
+    dfs["transactions"]
+    .select("card_id", F.try_to_timestamp(F.col("date"), F.lit("yyyy-MM-dd HH:mm:ss")).alias("txn_ts"))
+    .join(cards_dates, F.col("card_id") == F.col("card_pk"), "inner")
+)
+
+print("Transactions before account opened:",
+      txn_dates.filter(F.col("txn_ts") < F.col("opened")).count())
+print("Transactions after card expired:",
+      txn_dates.filter(F.col("txn_ts") >= F.add_months(F.col("exp"), 1)).count())
+# COMMAND ----------
+u = dfs["users"]
+print("--- users: birth_month, latitude, longitude ---")
+u.agg(
+    F.min(F.col("birth_month").cast("int")).alias("min_month"),
+    F.max(F.col("birth_month").cast("int")).alias("max_month"),
+    F.min(F.col("latitude").cast("double")).alias("min_lat"),
+    F.max(F.col("latitude").cast("double")).alias("max_lat"),
+    F.min(F.col("longitude").cast("double")).alias("min_lon"),
+    F.max(F.col("longitude").cast("double")).alias("max_lon"),
+).show()
+
+print("--- ID columns that fail to cast to BIGINT ---")
+for table, col in [("labels", "transaction_id"), ("transactions", "id"), ("cards", "id"), ("users", "id")]:
+    bad = dfs[table].filter(F.col(col).isNotNull() & F.col(col).try_cast("bigint").isNull()).count()
+    print(f"{table}.{col}: {bad}")
+# COMMAND ----------
