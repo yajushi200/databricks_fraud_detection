@@ -39,3 +39,25 @@ spark.sql(f"""
 """).show(truncate=False)
 print(spark.table(f"{catalog}.{target_schema}.mcc").count())
 # COMMAND ----------
+# MAGIC %md
+# MAGIC ## 02. fraud_labels (CTAS)
+# MAGIC - The dictionary sits inside a `target` key, so the json reader works with a MAP schema.
+# MAGIC - Explode the map into one row per transaction.
+# COMMAND ----------
+spark.sql(f"""
+    CREATE OR REPLACE TABLE {catalog}.{target_schema}.fraud_labels AS
+    SELECT
+        explode(target) AS (transaction_id, is_fraud),
+        current_timestamp() AS _ingested_at,
+        _metadata.file_path AS _source_file
+    FROM read_files('{raw}/fraud_labels/',
+        format => 'json',
+        schema => 'target MAP<STRING,STRING>')
+""")
+# COMMAND ----------
+spark.sql(f"""
+    SELECT * FROM {catalog}.{target_schema}.fraud_labels
+    ORDER BY transaction_id LIMIT 5
+""").show(truncate=False)
+print(spark.table(f"{catalog}.{target_schema}.fraud_labels").count())
+# COMMAND ----------
