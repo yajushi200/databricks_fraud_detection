@@ -61,3 +61,54 @@ spark.sql(f"""
 """).show(truncate=False)
 print(spark.table(f"{catalog}.{target_schema}.fraud_labels").count())
 # COMMAND ----------
+# MAGIC %md
+# MAGIC ## 03. cards (COPY INTO)
+# MAGIC - Step 1 creates an explicit-schema table with no CVV column, so CVV can never be stored (ADR 0005).
+# MAGIC - Step 2 loads with COPY INTO, selecting the 12 allowed columns by name; CVV is dropped by not selecting it.
+# MAGIC - Idempotent: COPY INTO records loaded files in the Delta log and skips them on re-runs.
+# COMMAND ----------
+spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS {catalog}.{target_schema}.cards (
+        id                    STRING,
+        client_id             STRING,
+        card_brand            STRING,
+        card_type             STRING,
+        card_number           STRING,
+        expires               STRING,
+        has_chip              STRING,
+        num_cards_issued      STRING,
+        credit_limit          STRING,
+        acct_open_date        STRING,
+        year_pin_last_changed STRING,
+        card_on_dark_web      STRING,
+        _ingested_at          TIMESTAMP,
+        _source_file          STRING
+    )
+    COMMENT 'Raw cards. CVV is excluded on purpose (ADR 0005): it must never be stored.'
+""")
+# COMMAND ----------
+spark.sql(f"""
+    COPY INTO {catalog}.{target_schema}.cards
+    FROM (
+        SELECT
+            id,
+            client_id,
+            card_brand,
+            card_type,
+            card_number,
+            expires,
+            has_chip,
+            num_cards_issued,
+            credit_limit,
+            acct_open_date,
+            year_pin_last_changed,
+            card_on_dark_web,
+            current_timestamp()  AS _ingested_at,
+            _metadata.file_path  AS _source_file
+        FROM '{raw}/cards/'
+    )
+    FILEFORMAT = CSV
+    FORMAT_OPTIONS ('header' = 'true')
+""").show()
+print(spark.table(f"{catalog}.{target_schema}.cards").count())
+# COMMAND ----------
