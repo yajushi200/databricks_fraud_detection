@@ -1,7 +1,6 @@
 -- =========================================================
 -- 00_setup_catalog.sql
--- Creates the catalog, schemas and landing volume for the
--- fraud detection lakehouse (dev environment).
+-- Creates the catalog, schemas and volumes (raw data, Auto Loader checkpoints) for the fraud detection lakehouse (dev environment).
 -- Safe to run more than once: every statement uses IF NOT EXISTS.
 -- Prod (Azure workspace) uses the same script with the catalog
 -- name swapped by the Asset Bundle (W3-1).
@@ -28,7 +27,7 @@ CREATE SCHEMA IF NOT EXISTS gold
 COMMENT 'Star schema and KPI views for analysts';
 
 CREATE SCHEMA IF NOT EXISTS ops
-COMMENT 'Quarantine, data quality results and reconciliation';
+COMMENT 'Quarantine, data quality results and reconciliation and Auto Loader checkpoints';
 
 CREATE SCHEMA IF NOT EXISTS ml
 COMMENT 'Features, registered models and fraud scores';
@@ -36,12 +35,16 @@ COMMENT 'Features, registered models and fraud scores';
 CREATE SCHEMA IF NOT EXISTS shared
 COMMENT 'Aggregated tables shared externally via Delta Sharing (no PII)';
 
--- 4. Volume for raw source files (managed, per ADR-0002)
+-- 4. Volumes (managed, per ADR-0002)
 USE SCHEMA landing;
 
 CREATE VOLUME IF NOT EXISTS raw_data
 COMMENT 'Raw source files, one folder per source';
 
+CREATE VOLUME IF NOT EXISTS ops.checkpoints
+COMMENT 'Auto Loader checkpoints and schema locations: tracks which files each stream has processed';
+
 -- 5. Checks
 SHOW SCHEMAS IN dev_fraud_detection;
 DESCRIBE VOLUME dev_fraud_detection.landing.raw_data;
+DESCRIBE VOLUME dev_fraud_detection.ops.checkpoints;
