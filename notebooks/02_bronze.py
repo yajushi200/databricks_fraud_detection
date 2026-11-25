@@ -112,3 +112,58 @@ spark.sql(f"""
 """).show()
 print(spark.table(f"{catalog}.{target_schema}.cards").count())
 # COMMAND ----------
+# MAGIC %md
+# MAGIC ## 04. users (COPY INTO)
+# MAGIC - Same pattern as cards: an explicit-schema table, then COPY INTO with the columns selected by name.
+# MAGIC - Contains PII (address, latitude, longitude, birth_year, birth_month): kept raw in bronze, protected with Unity Catalog column masks in v0.3.
+# MAGIC - Idempotent: re-runs skip files already loaded.
+# COMMAND ----------
+spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS {catalog}.{target_schema}.users (
+        id                STRING,
+        current_age       STRING,
+        retirement_age    STRING,
+        birth_year        STRING,
+        birth_month       STRING,
+        gender            STRING,
+        address           STRING,
+        latitude          STRING,
+        longitude         STRING,
+        per_capita_income STRING,
+        yearly_income     STRING,
+        total_debt        STRING,
+        credit_score      STRING,
+        num_credit_cards  STRING,
+        _ingested_at      TIMESTAMP,
+        _source_file      STRING
+    )
+    COMMENT 'Raw users. Contains PII (address, latitude, longitude, birth_year, birth_month); masked in Unity Catalog in v0.3.'
+""")
+# COMMAND ----------
+spark.sql(f"""
+    COPY INTO {catalog}.{target_schema}.users
+    FROM (
+        SELECT
+            id,
+            current_age,
+            retirement_age,
+            birth_year,
+            birth_month,
+            gender,
+            address,
+            latitude,
+            longitude,
+            per_capita_income,
+            yearly_income,
+            total_debt,
+            credit_score,
+            num_credit_cards,
+            current_timestamp()  AS _ingested_at,
+            _metadata.file_path  AS _source_file
+        FROM '{raw}/users/'
+    )
+    FILEFORMAT = CSV
+    FORMAT_OPTIONS ('header' = 'true')
+""").show()
+print(spark.table(f"{catalog}.{target_schema}.users").count())
+# COMMAND ----------
