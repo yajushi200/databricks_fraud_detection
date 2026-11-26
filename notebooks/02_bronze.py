@@ -8,6 +8,7 @@
 # COMMAND ----------
 from databricks.connect import DatabricksSession
 spark = DatabricksSession.builder.getOrCreate()
+from pyspark.sql import functions as F
 
 # COMMAND ----------
 catalog = "dev_fraud_detection"
@@ -166,4 +167,32 @@ spark.sql(f"""
     FORMAT_OPTIONS ('header' = 'true')
 """).show()
 print(spark.table(f"{catalog}.{target_schema}.users").count())
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 05. transactions (Auto Loader)
+# MAGIC - Incremental: each run processes only files not yet recorded in the checkpoint.
+# MAGIC - Values kept as strings; unparseable values go to `_rescued_data` instead of being lost.
+# MAGIC - Each stream gets its own checkpoint and schema folders under `ops.checkpoints`.
+# COMMAND ----------
+checkpoint_base = f"/Volumes/{catalog}/ops/checkpoints/bronze_transactions"
+
+(
+    spark.readStream
+    .format("cloudFiles")
+    .option("cloudFiles.format", "csv")
+    .option("header", "true")
+    .option("cloudFiles.schemaLocation", f"{checkpoint_base}/_schema")
+    .load(f"{raw}/transactions/")
+    .withColumn("_ingested_at", F.current_timestamp())
+    .withColumn("_source_file", F.col("_metadata.file_path"))
+    .writeStream
+    .option("checkpointLocation", f"{checkpoint_base}/_checkpoint")
+    .trigger(availableNow=True)
+    .toTable(f"{catalog}.{target_schema}.transactions")
+    .awaitTermination()
+)
+# COMMAND ----------
+txn = spark.table(f"{catalog}.{target_schema}.transactions")
+print(f"Rows:  {txn.count():,}   (expected 12,954,865)")
+print(f"Files: {txn.select('_source_file').distinct().count()}   (expected 115)")
 # COMMAND ----------
